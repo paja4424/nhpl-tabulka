@@ -1,30 +1,62 @@
 import React, { useState, useEffect } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import './App.css';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAZ0L2rpMT_M0IFs9qPdtiURftVaY5VruI",
+  authDomain: "://firebaseapp.com",
+  projectId: "nhpl-tabulka",
+  storageBucket: "nhpl-tabulka.firebasestorage.app",
+  messagingSenderId: "642569198112",
+  appId: "1:642569198112:web:db41d557e23128e25e3a45",
+  measurementId: "G-J8RYMZCM0C"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const leagueDocRef = doc(db, 'nhpl', 'tabulka');
 
 const INIT = Array.from({ length: 14 }, (_, i) => ({
   id: i + 1, name: `Tým ${i + 1}`, gp: 0, w: 0, otw: 0, otl: 0, l: 0, gf: 0, ga: 0, pts: 0, form: []
 }));
 
 export default function App() {
-  const [teams, setTeams] = useState(() => JSON.parse(localStorage.getItem('nhpl_10')) || INIT);
+  const [teams, setTeams] = useState(INIT);
+  const [loading, setLoading] = useState(true);
   const [admin, setAdmin] = useState(false);
   const [login, setLogin] = useState(false);
   const [pw, setPw] = useState('');
   const [newName, setNewName] = useState('');
   const [search, setSearch] = useState('');
 
-  useEffect(() => localStorage.setItem('nhpl_10', JSON.stringify(teams)), [teams]);
+  useEffect(() => {
+    const unsub = onSnapshot(leagueDocRef, (snapshot) => {
+      if (snapshot.exists() && snapshot.data().teams) {
+        setTeams(snapshot.data().teams);
+      } else {
+        setDoc(leagueDocRef, { teams: INIT });
+      }
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  const saveOnline = async (updatedTeams) => {
+    setTeams(updatedTeams);
+    await setDoc(leagueDocRef, { teams: updatedTeams });
+  };
 
   const handleLogin = (e) => {
     e.preventDefault();
-    if (pw === 'admin') { setAdmin(true); setLogin(false); setPw(''); }
+    if (pw === 'Admin1977') { setAdmin(true); setLogin(false); setPw(''); }
     else alert('Špatné heslo!');
   };
 
-  const edit = (id, key, val) => setTeams(teams.map(t => t.id === id ? { ...t, [key]: val } : t));
-  const add = (id, key, d) => setTeams(teams.map(t => t.id === id ? { ...t, [key]: Math.max(0, t[key] + d) } : t));
+  const edit = (id, key, val) => saveOnline(teams.map(t => t.id === id ? { ...t, [key]: val } : t));
+  const add = (id, key, d) => saveOnline(teams.map(t => t.id === id ? { ...t, [key]: Math.max(0, t[key] + d) } : t));
 
-  const match = (id, type) => setTeams(teams.map(t => {
+  const match = (id, type) => saveOnline(teams.map(t => {
     if (t.id !== id) return t;
     const f = [...(t.form || []), type].slice(-5);
     if (type === 'W') return { ...t, gp: t.gp + 1, w: t.w + 1, pts: t.pts + 3, form: f };
@@ -36,7 +68,7 @@ export default function App() {
   const addTeam = (e) => {
     e.preventDefault();
     if (!newName.trim()) return;
-    setTeams([...teams, { id: Date.now(), name: newName.trim(), gp: 0, w: 0, otw: 0, otl: 0, l: 0, gf: 0, ga: 0, pts: 0, form: [] }]);
+    saveOnline([...teams, { id: Date.now(), name: newName.trim(), gp: 0, w: 0, otw: 0, otl: 0, l: 0, gf: 0, ga: 0, pts: 0, form: [] }]);
     setNewName('');
   };
 
@@ -44,9 +76,11 @@ export default function App() {
   const ranked = sorted.map((t, idx) => ({ ...t, rank: idx + 1 }));
   const visible = ranked.filter(t => t.name.toLowerCase().includes(search.toLowerCase()));
 
-  const leader = ranked[0];
-  const topAttack = [...teams].sort((a, b) => b.gf - a.gf)[0];
+  const leader = ranked;
+  const topAttack = [...teams].sort((a, b) => b.gf - a.gf);
   const totalGoals = teams.reduce((s, t) => s + t.gf, 0);
+
+  if (loading) return <div className="wrap"><h2>Načítám živou tabulku NHPL...</h2></div>;
 
   return (
     <div className="wrap">
@@ -80,7 +114,7 @@ export default function App() {
             <input placeholder="Název nového týmu..." value={newName} onChange={e => setNewName(e.target.value)} />
             <button className="btn-red" type="submit">+ Přidat tým</button>
           </form>
-          <button className="btn" onClick={() => window.confirm('Resetovat na 14 týmů?') && setTeams(INIT)}>Reset 14 týmů</button>
+          <button className="btn" onClick={() => window.confirm('Resetovat na 14 týmů?') && saveOnline(INIT)}>Reset 14 týmů</button>
         </div>
       )}
 
@@ -158,7 +192,7 @@ export default function App() {
                         <button className="l" onClick={() => match(t.id, 'L')}>0</button>
                       </td>
                     )}
-                    {admin && <td><button onClick={() => window.confirm('Smazat?') && setTeams(teams.filter(x => x.id !== t.id))}>🗑️</button></td>}
+                    {admin && <td><button onClick={() => window.confirm('Smazat?') && saveOnline(teams.filter(x => x.id !== t.id))}>🗑️</button></td>}
                   </tr>
                 );
               })}
