@@ -104,38 +104,42 @@ export default function App() {
   };
   const pickWin = (mKey, idx) => {
     if (!admin) return;
-    const winT = bracket[mKey][idx];
-    const loseT = bracket[mKey][idx === 0 ? 1 : 0];
+    const pair = bracket[mKey];
+    const winT = pair?.at(idx);
+    const loseT = pair?.at(idx === 0 ? 1 : 0);
     if (!winT || winT === 'TBD') return;
-    const nb = { ...bracket };
-    const setSlot = (k, s, val) => { nb[k] = [...nb[k]]; nb[k][s] = val; };
 
-    if (mKey === 'ub1') { setSlot('ubSemi1', 0, winT); setSlot('lb1', 0, loseT); }
-    if (mKey === 'ub2') { setSlot('ubSemi1', 1, winT); setSlot('lb1', 1, loseT); }
-    if (mKey === 'ub3') { setSlot('ubSemi2', 0, winT); setSlot('lb2', 0, loseT); }
-    if (mKey === 'ub4') { setSlot('ubSemi2', 1, winT); setSlot('lb2', 1, loseT); }
-    if (mKey === 'ubSemi1') { setSlot('ubFinal', 0, winT); setSlot('lb2_2', 0, loseT); }
-    if (mKey === 'ubSemi2') { setSlot('ubFinal', 1, winT); setSlot('lb2_1', 0, loseT); }
-    if (mKey === 'ubFinal') { setSlot('grand', 0, winT); setSlot('lbFinal', 0, loseT); }
-    if (mKey === 'lb1') setSlot('lb2_1', 1, winT);
-    if (mKey === 'lb2') setSlot('lb2_2', 1, winT);
-    if (mKey === 'lb2_1') setSlot('lb3', 0, winT);
-    if (mKey === 'lb2_2') setSlot('lb3', 1, winT);
-    if (mKey === 'lb3') setSlot('lbFinal', 1, winT);
-    if (mKey === 'lbFinal') setSlot('grand', 1, winT);
+    const nb = { ...bracket };
+    const setSlot = (k, s, val) => { const n = [...nb[k]]; n.splice(s, 1, val); nb[k] = n; };
+
+    const routes = {
+      ub1: ['ubSemi1', 0, 'lb1', 0], ub2: ['ubSemi1', 1, 'lb1', 1],
+      ub3: ['ubSemi2', 0, 'lb2', 0], ub4: ['ubSemi2', 1, 'lb2', 1],
+      ubSemi1: ['ubFinal', 0, 'lb2_2', 0], ubSemi2: ['ubFinal', 1, 'lb2_1', 0],
+      ubFinal: ['grand', 0, 'lbFinal', 0], lb1: ['lb2_1', 1], lb2: ['lb2_2', 1],
+      lb2_1: ['lb3', 0], lb2_2: ['lb3', 1], lb3: ['lbFinal', 1], lbFinal: ['grand', 1]
+    };
+
     if (mKey === 'grand') nb.winner = winT;
+    else if (routes[mKey]) {
+      const r = routes[mKey];
+      setSlot(r.at(0), r.at(1), winT);
+      if (r.length > 2) setSlot(r.at(2), r.at(3), loseT);
+    }
     saveAll(teams, nb);
   };
 
   const MatchBox = ({ label, mKey }) => (
     <div className="m-card">
       <div className="m-lbl">{label}</div>
-      {map(idx => (
-        <div key={idx} className={`m-slot ${admin ? 'clk' : ''}`} onClick={() => pickWin(mKey, idx)}>
-          <span>{bracket[mKey]?.[idx] || 'TBD'}</span>
-          {admin && bracket[mKey]?.[idx] !== 'TBD' && <small>✓</small>}
-        </div>
-      ))}
+      {Array.from({ length: 2 }).map((_, idx) => {
+        const name = bracket[mKey]?.at(idx) || 'TBD';
+        return (
+          <div key={idx} className={`m-slot ${admin ? 'clk' : ''}`} onClick={() => pickWin(mKey, idx)}>
+            <span>{name}</span>{admin && name !== 'TBD' && <small>✓</small>}
+          </div>
+        );
+      })}
     </div>
   );
 
@@ -146,20 +150,13 @@ export default function App() {
       <header className="top">
         <div className="brand">
           <div className="logo">🏒</div>
-          <div>
-            <h1>NHPL <span>LEAGUE</span></h1>
-            <p className="sub">Oficiální liga • Puck • Postupuje TOP 8</p>
-          </div>
+          <div><h1>NHPL <span>LEAGUE</span></h1><p className="sub">Oficiální liga • Puck • Postupuje TOP 8</p></div>
         </div>
         <div className="top-r">
           <button className={tab === 'table' ? 'btn-red' : 'btn'} onClick={() => setTab('table')}>📊 Tabulka</button>
           <button className={tab === 'playoff' ? 'btn-red' : 'btn'} onClick={() => setTab('playoff')}>🏆 Play-off</button>
           <a href={discord} target="_blank" rel="noreferrer" className="btn-dc">Discord</a>
-          {!admin ? (
-            <button className="btn" onClick={() => setLogin(!login)}>🔒 Správce</button>
-          ) : (
-            <button className="btn-red" onClick={() => setAdmin(false)}>✓ Hotovo</button>
-          )}
+          {!admin ? <button className="btn" onClick={() => setLogin(!login)}>🔒 Správce</button> : <button className="btn-red" onClick={() => setAdmin(false)}>✓ Hotovo</button>}
         </div>
       </header>
 
@@ -176,10 +173,7 @@ export default function App() {
             <input placeholder="Nový tým..." value={newName} onChange={e => setNewName(e.target.value)} />
             <button className="btn-red" type="submit">+ Tým</button>
           </form>
-          <div className="dc-edit">
-            <span>Discord URL:</span>
-            <input value={discord} onChange={e => saveAll(teams, bracket, e.target.value)} />
-          </div>
+          <div className="dc-edit"><span>Discord:</span><input value={discord} onChange={e => saveAll(teams, bracket, e.target.value)} /></div>
           <button className="btn" onClick={() => window.confirm('Resetovat ligu?') && saveAll(INIT_TEAMS, INIT_BRACKET)}>Reset</button>
         </div>
       )}
@@ -197,24 +191,19 @@ export default function App() {
             <table>
               <thead>
                 <tr>
-                  <th>#</th><th className="left">Tým</th>
-                  <th>Z</th><th>V</th><th>VP</th><th>PP</th><th>P</th><th>Skóre</th><th>+/-</th><th>Forma</th><th>BODY</th>
+                  <th>#</th><th className="left">Tým</th><th>Z</th><th>V</th><th>VP</th><th>PP</th><th>P</th><th>Skóre</th><th>+/-</th><th>Forma</th><th>BODY</th>
                   {admin && <th>Zápas</th>}{admin && <th></th>}
                 </tr>
               </thead>
               <tbody>
                 {visible.map((t) => {
-                  const i = t.rank - 1;
-                  const diff = t.gf - t.ga;
+                  const i = t.rank - 1, diff = t.gf - t.ga;
                   return (
                     <tr key={t.id} className={`${i < 8 ? 'po' : ''} ${i === 0 ? 'first' : ''} ${i === 7 && !search ? 'cut' : ''}`}>
                       <td><span className="rk">{t.rank}</span></td>
                       <td className="left">
                         {admin ? <input value={t.name} onChange={e => edit(t.id, 'name', e.target.value)} /> : (
-                          <div className="t-cell">
-                            <span>{i === 0 && '👑 '}{t.name}</span>
-                            {i < 8 && <small className="tag">PLAY-OFF</small>}
-                          </div>
+                          <div className="t-cell"><span>{i === 0 && '👑 '}{t.name}</span>{i < 8 && <small className="tag">PLAY-OFF</small>}</div>
                         )}
                       </td>
                       {['gp', 'w', 'otw', 'otl', 'l'].map(k => (
@@ -249,60 +238,28 @@ export default function App() {
       ) : (
         <section className="bracket-wrap">
           <div className="br-head">
-            <div>
-              <h2>BRACKET STAGE • TOP 8 PLAY-OFF</h2>
-              <p className="sub">{admin ? 'Klikni na tým v zápase pro postup vítěze do dalšího kola' : 'Vyřazovací část NHPL (Upper & Lower Bracket)'}</p>
-            </div>
+            <div><h2>BRACKET STAGE • TOP 8</h2><p className="sub">{admin ? 'Klikni na tým pro postup do dalšího kola' : 'Vyřazovací část NHPL'}</p></div>
             {admin && (
               <div className="top-r">
-                <button className="btn-red" onClick={seedTop8}>⚡ Načíst TOP 8 z tabulky</button>
-                <button className="btn" onClick={() => saveAll(teams, INIT_BRACKET)}>Vyčistit pavouka</button>
+                <button className="btn-red" onClick={seedTop8}>⚡ Načíst TOP 8</button>
+                <button className="btn" onClick={() => saveAll(teams, INIT_BRACKET)}>Vyčistit</button>
               </div>
             )}
           </div>
-
           <div className="br-section-title">UPPER BRACKET</div>
           <div className="br-grid">
-            <div className="br-col">
-              <MatchBox label="UPPER ROUND 1 - 1 (1. vs 8.)" mKey="ub1" />
-              <MatchBox label="UPPER ROUND 1 - 2 (4. vs 5.)" mKey="ub2" />
-              <MatchBox label="UPPER ROUND 1 - 3 (2. vs 7.)" mKey="ub3" />
-              <MatchBox label="UPPER ROUND 1 - 4 (3. vs 6.)" mKey="ub4" />
-            </div>
-            <div className="br-col">
-              <MatchBox label="UPPER ROUND 2 - 1" mKey="ubSemi1" />
-              <MatchBox label="UPPER ROUND 2 - 2" mKey="ubSemi2" />
-            </div>
-            <div className="br-col">
-              <MatchBox label="UPPER FINAL" mKey="ubFinal" />
-            </div>
-            <div className="br-col">
-              <MatchBox label="GRAND FINAL" mKey="grand" />
-            </div>
-            <div className="br-col">
-              <div className="winner-box">
-                <div className="m-lbl">🏆 NHPL WINNER</div>
-                <div className="win-name">{bracket.winner}</div>
-              </div>
-            </div>
+            <div className="br-col"><MatchBox label="UR1 (1. vs 8.)" mKey="ub1" /><MatchBox label="UR1 (4. vs 5.)" mKey="ub2" /><MatchBox label="UR1 (2. vs 7.)" mKey="ub3" /><MatchBox label="UR1 (3. vs 6.)" mKey="ub4" /></div>
+            <div className="br-col"><MatchBox label="UPPER SEMI 1" mKey="ubSemi1" /><MatchBox label="UPPER SEMI 2" mKey="ubSemi2" /></div>
+            <div className="br-col"><MatchBox label="UPPER FINAL" mKey="ubFinal" /></div>
+            <div className="br-col"><MatchBox label="GRAND FINAL" mKey="grand" /></div>
+            <div className="br-col"><div className="winner-box"><div className="m-lbl">🏆 WINNER</div><div className="win-name">{bracket.winner}</div></div></div>
           </div>
-
           <div className="br-section-title lower-t">LOWER BRACKET</div>
           <div className="br-grid">
-            <div className="br-col">
-              <MatchBox label="LOWER ROUND 1 - 1" mKey="lb1" />
-              <MatchBox label="LOWER ROUND 1 - 2" mKey="lb2" />
-            </div>
-            <div className="br-col">
-              <MatchBox label="LOWER ROUND 2 - 1" mKey="lb2_1" />
-              <MatchBox label="LOWER ROUND 2 - 2" mKey="lb2_2" />
-            </div>
-            <div className="br-col">
-              <MatchBox label="LOWER ROUND 3" mKey="lb3" />
-            </div>
-            <div className="br-col">
-              <MatchBox label="LOWER FINAL" mKey="lbFinal" />
-            </div>
+            <div className="br-col"><MatchBox label="LOWER R1 - 1" mKey="lb1" /><MatchBox label="LOWER R1 - 2" mKey="lb2" /></div>
+            <div className="br-col"><MatchBox label="LOWER R2 - 1" mKey="lb2_1" /><MatchBox label="LOWER R2 - 2" mKey="lb2_2" /></div>
+            <div className="br-col"><MatchBox label="LOWER R3" mKey="lb3" /></div>
+            <div className="br-col"><MatchBox label="LOWER FINAL" mKey="lbFinal" /></div>
           </div>
         </section>
       )}
