@@ -101,3 +101,6 @@ td button:hover { background: #ff1e27; }
 
 .winner-box { background: #15151d; border: 2px solid #e50914; border-radius: 8px; overflow: hidden; text-align: center; box-shadow: 0 0 25px rgba(229, 9, 20, 0.4); }
 .win-name { background: #fff; color: #000; font-weight: 900; font-size: 1.1rem; padding: 1rem; text-transform: uppercase; }
+
+.br-in { background: transparent; border: 1px dashed #9ca3af; color: #0a0a0e; font-weight: 800; width: 100%; padding: 3px 6px; }
+.win-in { text-align: center; font-size: 1rem; text-transform: uppercase; }

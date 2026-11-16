@@ -21,18 +21,20 @@ const INIT_TEAMS = Array.from({ length: 14 }, (_, i) => ({
   id: i + 1, name: `Tým ${i + 1}`, gp: 0, w: 0, otw: 0, otl: 0, l: 0, gf: 0, ga: 0, pts: 0, form: []
 }));
 
-const INIT_BRACKET = {
-  ub1: ['TBD', 'TBD'], ub2: ['TBD', 'TBD'], ub3: ['TBD', 'TBD'], ub4: ['TBD', 'TBD'],
-  ubSemi1: ['TBD', 'TBD'], ubSemi2: ['TBD', 'TBD'], ubFinal: ['TBD', 'TBD'],
-  lb1: ['TBD', 'TBD'], lb2: ['TBD', 'TBD'],
-  lb2_1: ['TBD', 'TBD'], lb2_2: ['TBD', 'TBD'],
-  lb3: ['TBD', 'TBD'], lbFinal: ['TBD', 'TBD'],
-  grand: ['TBD', 'TBD'], winner: 'TBD'
+const INIT_SLOTS = {
+  ub1a: '', ub1b: '', ub2a: '', ub2b: '', ub3a: '', ub3b: '', ub4a: '', ub4b: '',
+  ubs1a: '', ubs1b: '', ubs2a: '', ubs2b: '',
+  ubfa: '', ubfb: '',
+  gfa: '', gfb: '', win: '',
+  lb1a: '', lb1b: '', lb2a: '', lb2b: '',
+  lb21a: '', lb21b: '', lb22a: '', lb22b: '',
+  lb3a: '', lb3b: '',
+  lbfa: '', lbfb: ''
 };
 
 export default function App() {
   const [teams, setTeams] = useState(INIT_TEAMS);
-  const [bracket, setBracket] = useState(INIT_BRACKET);
+  const [slots, setSlots] = useState(INIT_SLOTS);
   const [discord, setDiscord] = useState('https://discord.com');
   const [tab, setTab] = useState('table');
   const [loading, setLoading] = useState(true);
@@ -47,19 +49,19 @@ export default function App() {
       if (snap.exists()) {
         const d = snap.data();
         if (d.teams) setTeams(d.teams);
-        if (d.bracket) setBracket({ ...INIT_BRACKET, ...d.bracket });
+        if (d.slots) setSlots({ ...INIT_SLOTS, ...d.slots });
         if (d.discord) setDiscord(d.discord);
       } else {
-        setDoc(leagueDocRef, { teams: INIT_TEAMS, bracket: INIT_BRACKET, discord: 'https://discord.com' });
+        setDoc(leagueDocRef, { teams: INIT_TEAMS, slots: INIT_SLOTS, discord: 'https://discord.com' });
       }
       setLoading(false);
     });
     return () => unsub();
   }, []);
 
-  const saveAll = async (t = teams, b = bracket, dc = discord) => {
-    setTeams(t); setBracket(b); setDiscord(dc);
-    await setDoc(leagueDocRef, { teams: t, bracket: b, discord: dc });
+  const saveAll = async (t = teams, s = slots, dc = discord) => {
+    setTeams(t); setSlots(s); setDiscord(dc);
+    await setDoc(leagueDocRef, { teams: t, slots: s, discord: dc });
   };
 
   const handleLogin = (e) => {
@@ -70,6 +72,7 @@ export default function App() {
 
   const edit = (id, key, val) => saveAll(teams.map(t => t.id === id ? { ...t, [key]: val } : t));
   const add = (id, key, d) => saveAll(teams.map(t => t.id === id ? { ...t, [key]: Math.max(0, t[key] + d) } : t));
+  const setSlot = (key, val) => saveAll(teams, { ...slots, [key]: val });
 
   const match = (id, type) => saveAll(teams.map(t => {
     if (t.id !== id) return t;
@@ -90,56 +93,15 @@ export default function App() {
   const sorted = [...teams].sort((a, b) => b.pts - a.pts || b.w - a.w || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf);
   const ranked = sorted.map((t, idx) => ({ ...t, rank: idx + 1 }));
   const visible = ranked.filter(t => t.name.toLowerCase().includes(search.toLowerCase()));
-
-  const seedTop8 = () => {
-    if (ranked.length < 8) return alert('Potřebuješ alespoň 8 týmů!');
-    const nb = {
-      ...INIT_BRACKET,
-      ub1: [ranked.at(0).name, ranked.at(7).name],
-      ub2: [ranked.at(3).name, ranked.at(4).name],
-      ub3: [ranked.at(1).name, ranked.at(6).name],
-      ub4: [ranked.at(2).name, ranked.at(5).name],
-    };
-    saveAll(teams, nb);
-  };
-  const pickWin = (mKey, idx) => {
-    if (!admin) return;
-    const pair = bracket[mKey];
-    const winT = pair?.at(idx);
-    const loseT = pair?.at(idx === 0 ? 1 : 0);
-    if (!winT || winT === 'TBD') return;
-
-    const nb = { ...bracket };
-    const setSlot = (k, s, val) => { const n = [...nb[k]]; n.splice(s, 1, val); nb[k] = n; };
-
-    const routes = {
-      ub1: ['ubSemi1', 0, 'lb1', 0], ub2: ['ubSemi1', 1, 'lb1', 1],
-      ub3: ['ubSemi2', 0, 'lb2', 0], ub4: ['ubSemi2', 1, 'lb2', 1],
-      ubSemi1: ['ubFinal', 0, 'lb2_2', 0], ubSemi2: ['ubFinal', 1, 'lb2_1', 0],
-      ubFinal: ['grand', 0, 'lbFinal', 0], lb1: ['lb2_1', 1], lb2: ['lb2_2', 1],
-      lb2_1: ['lb3', 0], lb2_2: ['lb3', 1], lb3: ['lbFinal', 1], lbFinal: ['grand', 1]
-    };
-
-    if (mKey === 'grand') nb.winner = winT;
-    else if (routes[mKey]) {
-      const r = routes[mKey];
-      setSlot(r.at(0), r.at(1), winT);
-      if (r.length > 2) setSlot(r.at(2), r.at(3), loseT);
-    }
-    saveAll(teams, nb);
-  };
-
-  const MatchBox = ({ label, mKey }) => (
+  const Box = ({ title, k1, k2 }) => (
     <div className="m-card">
-      <div className="m-lbl">{label}</div>
-      {Array.from({ length: 2 }).map((_, idx) => {
-        const name = bracket[mKey]?.at(idx) || 'TBD';
-        return (
-          <div key={idx} className={`m-slot ${admin ? 'clk' : ''}`} onClick={() => pickWin(mKey, idx)}>
-            <span>{name}</span>{admin && name !== 'TBD' && <small>✓</small>}
-          </div>
-        );
-      })}
+      <div className="m-lbl">{title}</div>
+      <div className="m-slot">
+        {admin ? <input className="br-in" placeholder="Tým 1..." value={slots[k1] || ''} onChange={e => setSlot(k1, e.target.value)} /> : <span>{slots[k1] || 'TBD'}</span>}
+      </div>
+      <div className="m-slot">
+        {admin ? <input className="br-in" placeholder="Tým 2..." value={slots[k2] || ''} onChange={e => setSlot(k2, e.target.value)} /> : <span>{slots[k2] || 'TBD'}</span>}
+      </div>
     </div>
   );
 
@@ -173,8 +135,8 @@ export default function App() {
             <input placeholder="Nový tým..." value={newName} onChange={e => setNewName(e.target.value)} />
             <button className="btn-red" type="submit">+ Tým</button>
           </form>
-          <div className="dc-edit"><span>Discord:</span><input value={discord} onChange={e => saveAll(teams, bracket, e.target.value)} /></div>
-          <button className="btn" onClick={() => window.confirm('Resetovat ligu?') && saveAll(INIT_TEAMS, INIT_BRACKET)}>Reset</button>
+          <div className="dc-edit"><span>Discord:</span><input value={discord} onChange={e => saveAll(teams, slots, e.target.value)} /></div>
+          <button className="btn" onClick={() => window.confirm('Resetovat celou ligu?') && saveAll(INIT_TEAMS, INIT_SLOTS)}>Reset</button>
         </div>
       )}
 
@@ -238,28 +200,28 @@ export default function App() {
       ) : (
         <section className="bracket-wrap">
           <div className="br-head">
-            <div><h2>BRACKET STAGE • TOP 8</h2><p className="sub">{admin ? 'Klikni na tým pro postup do dalšího kola' : 'Vyřazovací část NHPL'}</p></div>
-            {admin && (
-              <div className="top-r">
-                <button className="btn-red" onClick={seedTop8}>⚡ Načíst TOP 8</button>
-                <button className="btn" onClick={() => saveAll(teams, INIT_BRACKET)}>Vyčistit</button>
-              </div>
-            )}
+            <div><h2>PLAY-OFF PAVOUK • TOP 8</h2><p className="sub">{admin ? 'Napiš postupující týmy přímo do kolonek v pavouku' : 'Upper & Lower Bracket NHPL'}</p></div>
+            {admin && <button className="btn" onClick={() => saveAll(teams, INIT_SLOTS)}>Vyčistit pavouka</button>}
           </div>
           <div className="br-section-title">UPPER BRACKET</div>
           <div className="br-grid">
-            <div className="br-col"><MatchBox label="UR1 (1. vs 8.)" mKey="ub1" /><MatchBox label="UR1 (4. vs 5.)" mKey="ub2" /><MatchBox label="UR1 (2. vs 7.)" mKey="ub3" /><MatchBox label="UR1 (3. vs 6.)" mKey="ub4" /></div>
-            <div className="br-col"><MatchBox label="UPPER SEMI 1" mKey="ubSemi1" /><MatchBox label="UPPER SEMI 2" mKey="ubSemi2" /></div>
-            <div className="br-col"><MatchBox label="UPPER FINAL" mKey="ubFinal" /></div>
-            <div className="br-col"><MatchBox label="GRAND FINAL" mKey="grand" /></div>
-            <div className="br-col"><div className="winner-box"><div className="m-lbl">🏆 WINNER</div><div className="win-name">{bracket.winner}</div></div></div>
+            <div className="br-col"><Box title="UPPER ROUND 1 - 1" k1="ub1a" k2="ub1b" /><Box title="UPPER ROUND 1 - 2" k1="ub2a" k2="ub2b" /><Box title="UPPER ROUND 1 - 3" k1="ub3a" k2="ub3b" /><Box title="UPPER ROUND 1 - 4" k1="ub4a" k2="ub4b" /></div>
+            <div className="br-col"><Box title="UPPER SEMI 1" k1="ubs1a" k2="ubs1b" /><Box title="UPPER SEMI 2" k1="ubs2a" k2="ubs2b" /></div>
+            <div className="br-col"><Box title="UPPER FINAL" k1="ubfa" k2="ubfb" /></div>
+            <div className="br-col"><Box title="GRAND FINAL" k1="gfa" k2="gfb" /></div>
+            <div className="br-col">
+              <div className="winner-box">
+                <div className="m-lbl">🏆 NHPL WINNER</div>
+                <div className="win-name">{admin ? <input className="br-in win-in" placeholder="Vítěz ligy..." value={slots.win || ''} onChange={e => setSlot('win', e.target.value)} /> : (slots.win || 'TBD')}</div>
+              </div>
+            </div>
           </div>
           <div className="br-section-title lower-t">LOWER BRACKET</div>
           <div className="br-grid">
-            <div className="br-col"><MatchBox label="LOWER R1 - 1" mKey="lb1" /><MatchBox label="LOWER R1 - 2" mKey="lb2" /></div>
-            <div className="br-col"><MatchBox label="LOWER R2 - 1" mKey="lb2_1" /><MatchBox label="LOWER R2 - 2" mKey="lb2_2" /></div>
-            <div className="br-col"><MatchBox label="LOWER R3" mKey="lb3" /></div>
-            <div className="br-col"><MatchBox label="LOWER FINAL" mKey="lbFinal" /></div>
+            <div className="br-col"><Box title="LOWER ROUND 1 - 1" k1="lb1a" k2="lb1b" /><Box title="LOWER ROUND 1 - 2" k1="lb2a" k2="lb2b" /></div>
+            <div className="br-col"><Box title="LOWER ROUND 2 - 1" k1="lb21a" k2="lb21b" /><Box title="LOWER ROUND 2 - 2" k1="lb22a" k2="lb22b" /></div>
+            <div className="br-col"><Box title="LOWER ROUND 3" k1="lb3a" k2="lb3b" /></div>
+            <div className="br-col"><Box title="LOWER FINAL" k1="lbfa" k2="lbfb" /></div>
           </div>
         </section>
       )}
