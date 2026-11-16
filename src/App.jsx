@@ -95,10 +95,10 @@ export default function App() {
     if (ranked.length < 8) return alert('Potřebuješ alespoň 8 týmů!');
     const nb = {
       ...INIT_BRACKET,
-      ub1: [ranked[0].name, ranked[7].name],
-      ub2: [ranked[3].name, ranked[4].name],
-      ub3: [ranked[1].name, ranked[6].name],
-      ub4: [ranked[2].name, ranked[5].name],
+      ub1: [ranked.at(0).name, ranked.at(7).name],
+      ub2: [ranked.at(3).name, ranked.at(4).name],
+      ub3: [ranked.at(1).name, ranked.at(6).name],
+      ub4: [ranked.at(2).name, ranked.at(5).name],
     };
     saveAll(teams, nb);
   };
